@@ -273,7 +273,7 @@ td:last-child{padding-right:16px;text-align:right}
         <div class="bar-list" id="ch-seg"></div>
       </div>
       <div class="chart-panel">
-        <div class="chart-panel-title">By Template Type
+        <div class="chart-panel-title">By Source
           <span id="ch-tmpl-clear" onclick="_activeTmpl=null;rerender()" style="display:none;font-size:9px;font-family:var(--f-mono);color:var(--accent);cursor:pointer;margin-left:8px">✕ clear</span>
         </div>
         <div class="chart-panel-sub" id="ch-tmpl-sub"></div>
@@ -497,7 +497,7 @@ function renderCharts(rows){
   const segClick=Object.assign(name=>{_activeSeg=_activeSeg===name?null:name;rerender();},{active:_activeSeg});
   drawBars('ch-seg','ch-seg-sub',Object.entries(segMap).sort((a,b)=>b[1]-a[1]),`${rows.length} Videos · click to filter`,segClick);
   document.getElementById('ch-seg-clear').style.display=_activeSeg?'inline':'none';
-  const tmplMap={};rows.forEach(r=>{const t=(r.tempType||'Unknown').trim();tmplMap[t]=(tmplMap[t]||0)+1;});
+  const tmplMap={};rows.forEach(r=>{const t=(r.type||'Unknown').trim();tmplMap[t]=(tmplMap[t]||0)+1;});
   const tmplClick=Object.assign(name=>{_activeTmpl=_activeTmpl===name?null:name;rerender();},{active:_activeTmpl});
   drawBars('ch-tmpl','ch-tmpl-sub',Object.entries(tmplMap).sort((a,b)=>b[1]-a[1]),`${rows.length} Videos · click to filter`,tmplClick);
   document.getElementById('ch-tmpl-clear').style.display=_activeTmpl?'inline':'none';
@@ -575,7 +575,7 @@ function openDrawer(title,rows){
         <th onclick="sortDrawer('videoId')">Video ID</th>
         <th onclick="sortDrawer('entName')">Enterprise</th>
         <th onclick="sortDrawer('teamName')">Team</th>
-        <th onclick="sortDrawer('type')">Type</th>
+        <th onclick="sortDrawer('type')">Source</th>
         <th onclick="sortDrawer('crmStatus')">CRM Status</th>
         <th onclick="sortDrawer('hrsRecv')">Pending Hrs</th>
         <th style="text-align:center">Links</th>
@@ -624,8 +624,8 @@ function updateResetBtn(){const b=document.getElementById('reset-btn');if(b)b.st
 
 // ── DOWNLOAD ──────────────────────────────────────────────────────
 function dl(blob,n){const a=document.createElement('a');a.href=URL.createObjectURL(blob);a.download=n;a.click();setTimeout(()=>URL.revokeObjectURL(a.href),2000);}
-const DL_KEYS=['vin','videoId','entName','teamName','type','tempType','viewMode','customerSegment','crmStatus','hrsRecv','pocEmail','createdOn','updatedOn'];
-const DL_LABELS=['VIN','Video ID','Enterprise','Team','Type','Template','View Mode','Customer Segment','CRM Status','Pending Hrs','POC Email','Created On','Updated On'];
+const DL_KEYS=['vin','videoId','entName','teamName','type','customerSegment','crmStatus','hrsRecv','pocEmail','createdOn','updatedOn'];
+const DL_LABELS=['VIN','Video ID','Enterprise','Team','Source','Customer Segment','CRM Status','Pending Hrs','POC Email','Created On','Updated On'];
 function rowToCsv(r){return DL_KEYS.map(k=>{const v=String(r[k]??'');return/[,"]/.test(v)?`"${v.replace(/"/g,'""')}"`:v;}).join(',');}
 function dlDrawer(fmt){
   if(!_drawerRows.length)return;
@@ -733,15 +733,14 @@ function normalizeRow(r,entMap){
   const crmStatus=pick(r,'CRM_Status');
   const rb=crmStatus==='qc_unassigned'?'QC Pending':crmStatus==='qc_done'?'QC Done':crmStatus;
   const pocEmail=pick(r,'POC_CS')||pick(r,'POC_OB')||ent.email||'';
-  const tempType=pick(r,'Temp_Type');const viewMode=pick(r,'View_Mode');
-  const type=tempType?(viewMode?`${tempType} · ${viewMode}`:tempType):viewMode;
+  const type=pick(r,'source');
   const hrsRecv=hAgo(pick(r,'Created_ON'));
 
   return{
     vin:pick(r,'VIN'),videoId:pick(r,'Video_ID'),skuId:pick(r,'Sku_ID'),mediaId:pick(r,'asku.mediaId'),
     eid,entName:ent.name||pick(r,'Ent_Name')||eid,entType:ent.type||'',entStage:ent.stage||'',entEmail:ent.email||pocEmail,pocEmail,
     teamId:tid,teamName:pick(r,'Team_Name')||tid,
-    customerSegment:ent.customerSegment||'',crmStatus,rb,tempType,viewMode,type,rejectedReason:pick(r,'rejected_reason'),videoStatus:pick(r,'v.status'),
+    customerSegment:ent.customerSegment||'',crmStatus,rb,type,rejectedReason:pick(r,'rejected_reason'),videoStatus:pick(r,'v.status'),
     createdOn:pick(r,'Created_ON'),updatedOn:pick(r,'Updated_ON'),mediaCreatedAt:pick(r,'media_created_at'),
     hrsRecv,
     holdReason:pick(r,'rejected_reason'),
