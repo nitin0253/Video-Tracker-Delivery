@@ -424,7 +424,7 @@ function slaChip(flag){return flag?`<span class="sla-ok">✓ SLA</span>`:`<span 
 function renderMetrics(rows){
   const total=rows.length,
         ents=[...new Set(rows.map(r=>r.eid).filter(Boolean))].length,
-        teams=[...new Set(rows.map(r=>r.teamId).filter(Boolean))].length,
+        teams=[...new Set(rows.map(r=>r.teamId).filter(Boolean))].length;
   const items=[
     {icon:'🎬',val:total,  label:'Total Videos', sub:lbl()||'QC Pending'},
     {icon:'🏢',val:ents,   label:'Enterprises',  sub:'Unique'},
