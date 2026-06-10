@@ -69,7 +69,9 @@ async function buildCache() {
     const tid = pick(r, 'Team_ID');
     const ent = entMap[eid] || {};
     const pocEmail = pick(r, 'POC_CS') || pick(r, 'POC_OB') || ent.email || '';
-    const source = pick(r, 'source');
+    const tempType = pick(r, 'Temp_Type');
+    const viewMode  = pick(r, 'View_Mode');
+    const source    = pick(r, 'source');
     return {
       vin:             pick(r, 'VIN'),
       videoId:         pick(r, 'Video_ID'),
@@ -83,6 +85,7 @@ async function buildCache() {
       customerSegment: ent.customerSegment || '',
       crmStatus:       pick(r, 'CRM_Status'),
       rb:              'QC Pending',
+      tempType,
       type:            source,
       holdReason:      pick(r, 'rejected_reason'),
       createdOn:       pick(r, 'Created_ON'),
