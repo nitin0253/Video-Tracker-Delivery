@@ -778,7 +778,7 @@ function toggleTheme(){const n=document.documentElement.getAttribute('data-theme
 // ── AUTO-REFRESH ───────────────────────────────────────────────────
 const AUTO_MS=30*60*1000;let _refreshStart=Date.now(),_refreshTimer=null;
 const RING_CIRC=87.96;
-function startAutoRefresh(){clearInterval(_refreshTimer);_refreshStart=Date.now();updateRing();_refreshTimer=setInterval(()=>{updateRing();if(Date.now()-_refreshStart>=AUTO_MS)loadData(true);},1000);}
+function startAutoRefresh(){clearInterval(_refreshTimer);_refreshStart=Date.now();updateRing();_refreshTimer=setInterval(()=>{updateRing();if(Date.now()-_refreshStart>=AUTO_MS)loadData();},1000);}
 function updateRing(){
   const elapsed=Date.now()-_refreshStart,progress=Math.min(elapsed/AUTO_MS,1),remaining=Math.max(AUTO_MS-elapsed,0);
   const ring=document.getElementById('ring-fill'),label=document.getElementById('ring-label');
@@ -788,29 +788,26 @@ function updateRing(){
   label.textContent=String(Math.floor(ts/60)).padStart(2,'0')+':'+String(ts%60).padStart(2,'0');
   ring.style.stroke=remaining<60000?'var(--red)':'var(--green)';
 }
-function manualRefresh(){clearInterval(_refreshTimer);_uploadedVideo=null;_uploadedEnt=null;loadData(true);}
+
 function showSkeleton(){const el=document.getElementById('metrics');if(el)el.innerHTML=Array(5).fill('<div class="metric skel" style="height:100px"></div>').join('');}
 
 // ── LOAD (via /api/data just like original VIN dashboard) ─────────
-async function loadData(force){
+async function loadData(){
   const dashEl=document.getElementById('dash');
   if(dashEl.style.display!=='none')showSkeleton();
   else{document.getElementById('loading').style.display='flex';dashEl.style.display='none';}
   document.getElementById('uf').style.display='none';
   document.getElementById('st-text').textContent='Loading…';
   try{
-    const r=await fetch(API + (force?'?force=1':''));
+    const r=await fetch(API);
     if(!r.ok)throw new Error(`HTTP ${r.status}`);
     const j=await r.json();
     if(j.error)throw new Error(j.error);
     if(!j.rows?.length)throw new Error('0 rows');
-    if(j.lastSynced)document.getElementById('sy').textContent=(j.stale?'⟳ ':'')+'Synced '+new Date(j.lastSynced).toLocaleTimeString();
-    // Normalise: data.js already returns shaped rows, just re-map field names
-    const now=Date.now();
+    if(j.lastSynced)document.getElementById('sy').textContent='Synced '+new Date(j.lastSynced).toLocaleTimeString();
     const rows=j.rows.map(r=>({
       vin:        r.vin||'',
       videoId:    r.videoId||'',
-      skuId:      r.skuId||'',
       eid:        r.eid||'',
       entName:    r.entName||'',
       entStage:   r.entStage||'',
@@ -820,17 +817,17 @@ async function loadData(force){
       teamName:   r.teamName||'',
       customerSegment: r.customerSegment||'',
       crmStatus:  r.crmStatus||'',
-      rb:         r.rb||'',
+      rb:         r.rb||'QC Pending',
       tempType:   r.tempType||'',
       viewMode:   r.viewMode||'',
       type:       r.type||'',
-      hrsRecv:    r.hrsRecv!=null?Number(r.hrsRecv):null,
+      holdReason: r.holdReason||'',
       createdOn:  r.createdOn||'',
       updatedOn:  r.updatedOn||'',
+      hrsRecv:    r.hrsRecv!=null?Number(r.hrsRecv):null,
       videoUrl:   r.videoUrl||'',
       websiteLink:r.websiteLink||'',
       logoUrl:    r.logoUrl||'',
-      vidCount:   1,imgCount:0,
     }));
     document.getElementById('loading').style.display='none';
     dashEl.style.display='block';
@@ -839,17 +836,11 @@ async function loadData(force){
   }catch(err){
     document.getElementById('loading').style.display='none';
     document.getElementById('uf').style.display='block';
-    const isTimeout = err.message.includes('abort') || err.message.includes('timeout') || err.message.includes('504') || err.message.includes('500');
-    document.getElementById('uf-msg').textContent = isTimeout
-      ? 'Request timed out — Metabase CSV is large. The data is cached once loaded; try refreshing in 30 seconds or upload the CSV below.'
-      : `API fetch failed: ${err.message}. Download CSV and upload below.`;
+    document.getElementById('uf-msg').textContent=`Failed to load: ${err.message}`;
   }
 }
 
-// ── DROPDOWN ──────────────────────────────────────────────────────
-function toggleDl(id){const dd=document.getElementById(id);if(!dd)return;const isOpen=dd.classList.contains('open');document.querySelectorAll('.dl-dropdown.open').forEach(d=>d.classList.remove('open'));if(!isOpen)dd.classList.add('open');}
-function closeDl(id){const dd=document.getElementById(id);if(dd)dd.classList.remove('open');}
-document.addEventListener('click',e=>{if(!e.target.closest('.dl-dropdown'))document.querySelectorAll('.dl-dropdown.open').forEach(d=>d.classList.remove('open'));});
+function manualRefresh(){clearInterval(_refreshTimer);_uploadedVideo=null;_uploadedEnt=null;loadData();}
 
 loadData();
 </script>
