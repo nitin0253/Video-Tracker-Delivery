@@ -776,19 +776,9 @@ function toggleTheme(){const n=document.documentElement.getAttribute('data-theme
 (()=>{const s=localStorage.getItem('vpend-theme');if(s){document.documentElement.setAttribute('data-theme',s);document.getElementById('tbtn').textContent=s==='dark'?'🌙':'☀️';}})();
 
 // ── AUTO-REFRESH ───────────────────────────────────────────────────
-const AUTO_MS=30*60*1000;let _refreshStart=Date.now(),_refreshTimer=null,_pausedAt=null;
+const AUTO_MS=30*60*1000;let _refreshStart=Date.now(),_refreshTimer=null;
 const RING_CIRC=87.96;
-function startAutoRefresh(){
-  clearInterval(_refreshTimer);
-  _refreshStart=Date.now();
-  _pausedAt=null;
-  updateRing();
-  _refreshTimer=setInterval(()=>{
-    if(document.hidden)return; // don't tick or refresh while tab is backgrounded
-    updateRing();
-    if(Date.now()-_refreshStart>=AUTO_MS)loadData();
-  },1000);
-}
+function startAutoRefresh(){clearInterval(_refreshTimer);_refreshStart=Date.now();updateRing();_refreshTimer=setInterval(()=>{updateRing();if(Date.now()-_refreshStart>=AUTO_MS)loadData();},1000);}
 function updateRing(){
   const elapsed=Date.now()-_refreshStart,progress=Math.min(elapsed/AUTO_MS,1),remaining=Math.max(AUTO_MS-elapsed,0);
   const ring=document.getElementById('ring-fill'),label=document.getElementById('ring-label');
@@ -798,19 +788,6 @@ function updateRing(){
   label.textContent=String(Math.floor(ts/60)).padStart(2,'0')+':'+String(ts%60).padStart(2,'0');
   ring.style.stroke=remaining<60000?'var(--red)':'var(--green)';
 }
-
-// Pause/resume auto-refresh countdown based on tab visibility
-document.addEventListener('visibilitychange',()=>{
-  if(document.hidden){
-    _pausedAt=Date.now();
-  }else if(_pausedAt){
-    // shift _refreshStart forward by the hidden duration so the countdown
-    // resumes where it left off instead of firing immediately on return
-    _refreshStart += (Date.now()-_pausedAt);
-    _pausedAt=null;
-    updateRing();
-  }
-});
 
 function showSkeleton(){const el=document.getElementById('metrics');if(el)el.innerHTML=Array(5).fill('<div class="metric skel" style="height:100px"></div>').join('');}
 
