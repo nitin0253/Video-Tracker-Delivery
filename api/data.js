@@ -1,9 +1,7 @@
-import { kv } from '@vercel/kv';
-
+let videoCache = null, entCache = null, lastFetch = 0;
+const CACHE_TTL = 5 * 60 * 1000;
 const VIDEO_URL = "https://metabase.spyne.ai/public/question/9bff7307-a936-4618-b179-0c2f898210a8.csv";
 const ENT_URL   = "https://metabase.spyne.ai/public/question/b8f1271c-cc5a-470f-badf-807711f74af4.csv";
-const CACHE_TTL = 5 * 60 * 1000; // 5 minutes
-const KV_KEY = 'vin-tracker:data';
 
 function splitRow(row) {
   const out = []; let cur = '', q = false;
@@ -38,8 +36,10 @@ function hoursAgo(ts, now) {
   const h = (now - d) / 3600000; return h >= 0 ? h : null;
 }
 
-async function fetchAndBuild() {
+async function buildCache() {
+  if (videoCache && Date.now() - lastFetch < CACHE_TTL) return { videoCache, entCache };
   const now = Date.now();
+
   const [videoResp, entResp] = await Promise.all([
     fetch(VIDEO_URL, { headers: { 'User-Agent': 'Mozilla/5.0' } }),
     fetch(ENT_URL,   { headers: { 'User-Agent': 'Mozilla/5.0' } }),
@@ -64,7 +64,7 @@ async function fetchAndBuild() {
     });
   }
 
-  const rows = rawVideo.map(r => {
+  videoCache = rawVideo.map(r => {
     const eid = pick(r, 'Ent_ID');
     const tid = pick(r, 'Team_ID');
     const ent = entMap[eid] || {};
@@ -86,7 +86,6 @@ async function fetchAndBuild() {
       crmStatus:       pick(r, 'CRM_Status'),
       rb:              'QC Pending',
       tempType,
-      viewMode,
       type:            source,
       holdReason:      pick(r, 'rejected_reason'),
       createdOn:       pick(r, 'Created_ON'),
@@ -98,44 +97,27 @@ async function fetchAndBuild() {
     };
   });
 
-  const ents = Object.entries(entMap).map(([id, e]) => ({ id, ...e }));
-  const payload = { rows, ents, total: rows.length, lastSynced: new Date(now).toISOString(), _fetchedAt: now };
-
-  // Fire-and-forget write so we don't block the response on KV latency
-  kv.set(KV_KEY, payload).catch(() => {});
-  return payload;
-}
-
-async function getData(force) {
-  if (!force) {
-    const cached = await kv.get(KV_KEY);
-    if (cached && Date.now() - cached._fetchedAt < CACHE_TTL) {
-      return cached;
-    }
-  }
-  return fetchAndBuild();
+  entCache = Object.entries(entMap).map(([id, e]) => ({ id, ...e }));
+  lastFetch = now;
+  return { videoCache, entCache };
 }
 
 export default async function handler(req, res) {
   res.setHeader('Access-Control-Allow-Origin', '*');
-  res.setHeader('Cache-Control', 's-maxage=60, stale-while-revalidate=300');
+  res.setHeader('Cache-Control', 'no-store');
   if (req.method === 'OPTIONS') { res.status(200).end(); return; }
-
   try {
-    const data = await getData(req.query.force === '1');
+    if (req.query.force === '1') { videoCache = null; entCache = null; lastFetch = 0; }
+    const { videoCache: rows, entCache: ents } = await buildCache();
     if (req.query.debug === '1') {
       return res.status(200).json({
-        totalVideos: data.rows.length,
-        totalEnts:   data.ents.length,
-        sampleRow:   data.rows[0],
-        sampleEnt:   data.ents[0],
-        uniqueType:  [...new Set(data.rows.map(r => r.type).filter(Boolean))],
-        uniqueCrm:   [...new Set(data.rows.map(r => r.crmStatus).filter(Boolean))],
-        lastSynced:  data.lastSynced,
+        totalVideos: rows.length, totalEnts: ents.length,
+        sampleRow:   rows[0],    sampleEnt: ents[0],
+        uniqueType:  [...new Set(rows.map(r => r.type).filter(Boolean))],
+        uniqueCrm:   [...new Set(rows.map(r => r.crmStatus).filter(Boolean))],
       });
     }
-    const { rows, ents, total, lastSynced } = data;
-    res.status(200).json({ rows, ents, total, lastSynced });
+    res.status(200).json({ rows, ents, total: rows.length, lastSynced: new Date(lastFetch).toISOString() });
   } catch (err) {
     res.status(500).json({ error: err.message });
   }
