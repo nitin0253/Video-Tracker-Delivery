@@ -803,9 +803,8 @@ async function loadData(){
     if(!r.ok)throw new Error(`HTTP ${r.status}`);
     const j=await r.json();
     if(j.error)throw new Error(j.error);
-    if(!j.rows?.length)throw new Error('0 rows');
     if(j.lastSynced)document.getElementById('sy').textContent='Synced '+new Date(j.lastSynced).toLocaleTimeString();
-    const rows=j.rows.map(r=>({
+    const rows=j.rows && j.rows.length ? j.rows.map(r=>({
       vin:        r.vin||'',
       videoId:    r.videoId||'',
       eid:        r.eid||'',
@@ -828,7 +827,7 @@ async function loadData(){
       videoUrl:   r.videoUrl||'',
       websiteLink:r.websiteLink||'',
       logoUrl:    r.logoUrl||'',
-    }));
+    })) : [];
     document.getElementById('loading').style.display='none';
     dashEl.style.display='block';
     processData(rows,j.ents||[]);
