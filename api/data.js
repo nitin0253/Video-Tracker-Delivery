@@ -1,7 +1,68 @@
 let videoCache = null, entCache = null, lastFetch = 0;
 const CACHE_TTL = 5 * 60 * 1000;
-const VIDEO_URL = "https://metabase.spyne.ai/public/question/9bff7307-a936-4618-b179-0c2f898210a8.csv";
-const ENT_URL   = "https://metabase.spyne.ai/public/question/b8f1271c-cc5a-470f-badf-807711f74af4.csv";
+
+// ── Config (set these in the Vercel dashboard → Settings → Environment Variables,
+//    or in a local .env for `vercel dev`). NEVER commit real credentials. ──────────
+const MB = (process.env.METABASE_URL || 'https://metabase.spyne.ai').replace(/\/+$/, '');
+const VIDEO_CARD_ID = process.env.VIDEO_CARD_ID || '12224';       // the private "video pendency" question
+const MB_USER     = process.env.METABASE_USER || '';
+const MB_PASS     = process.env.METABASE_PASSWORD || '';
+const MB_API_KEY  = process.env.METABASE_API_KEY || '';           // optional alternative to user/pass
+
+// Enterprise details stay on their existing PUBLIC link (no auth needed).
+const ENT_URL = process.env.ENT_URL
+  || "https://metabase.spyne.ai/public/question/b8f1271c-cc5a-470f-badf-807711f74af4.csv";
+
+// ── Metabase auth: cache a session token, re-login automatically on expiry ────────
+let mbSession = null;
+
+async function login() {
+  if (!MB_USER || !MB_PASS) {
+    throw new Error('Missing METABASE_USER / METABASE_PASSWORD env vars');
+  }
+  const resp = await fetch(`${MB}/api/session`, {
+    method: 'POST',
+    headers: { 'Content-Type': 'application/json' },
+    body: JSON.stringify({ username: MB_USER, password: MB_PASS }),
+  });
+  if (!resp.ok) {
+    throw new Error(`Metabase login ${resp.status}: ${(await resp.text()).slice(0, 200)}`);
+  }
+  mbSession = (await resp.json()).id;
+  return mbSession;
+}
+
+function authHeaders(token) {
+  return MB_API_KEY ? { 'X-Api-Key': MB_API_KEY } : { 'X-Metabase-Session': token };
+}
+
+// Fetch a saved question's results as CSV via the authenticated API. This returns
+// the SAME CSV the public link did, so all the parsing below is unchanged.
+async function fetchCardCsv(cardId) {
+  const url = `${MB}/api/card/${cardId}/query/csv`;
+  const doFetch = (token) => fetch(url, {
+    method: 'POST',
+    headers: {
+      ...authHeaders(token),
+      'Content-Type': 'application/x-www-form-urlencoded',
+    },
+    body: 'parameters=' + encodeURIComponent('[]'),
+  });
+
+  let token = MB_API_KEY ? null : (mbSession || await login());
+  let resp = await doFetch(token);
+
+  // Session expired / invalid → drop it, log in again, retry once.
+  if (!MB_API_KEY && (resp.status === 401 || resp.status === 403)) {
+    mbSession = null;
+    token = await login();
+    resp = await doFetch(token);
+  }
+  if (!resp.ok) {
+    throw new Error(`Video card ${cardId} query ${resp.status}: ${(await resp.text()).slice(0, 200)}`);
+  }
+  return resp.text();
+}
 
 function splitRow(row) {
   const out = []; let cur = '', q = false;
@@ -40,16 +101,18 @@ async function buildCache() {
   if (videoCache && Date.now() - lastFetch < CACHE_TTL) return { videoCache, entCache };
   const now = Date.now();
 
-  const [videoResp, entResp] = await Promise.all([
-    fetch(VIDEO_URL, { headers: { 'User-Agent': 'Mozilla/5.0' } }),
-    fetch(ENT_URL,   { headers: { 'User-Agent': 'Mozilla/5.0' } }),
+  // Video question → authenticated Metabase API; enterprise → existing public link.
+  const [rawVideoText, entResult] = await Promise.all([
+    fetchCardCsv(VIDEO_CARD_ID),
+    fetch(ENT_URL, { headers: { 'User-Agent': 'Mozilla/5.0' } })
+      .then(r => (r.ok ? r.text() : null))
+      .catch(() => null),
   ]);
-  if (!videoResp.ok) throw new Error(`Video CSV ${videoResp.status}`);
-  const rawVideo = parseCSV(await videoResp.text());
+  const rawVideo = parseCSV(rawVideoText);
 
   const entMap = {};
-  if (entResp.ok) {
-    const rawEnt = parseCSV(await entResp.text());
+  if (entResult) {
+    const rawEnt = parseCSV(entResult);
     rawEnt.forEach(r => {
       const id = pick(r, 'dt.enterprise_id', 'enterprise_id', 'enterpriseId');
       if (id) {
