@@ -97,6 +97,8 @@ function hoursAgo(ts, now) {
   const h = (now - d) / 3600000; return h >= 0 ? h : null;
 }
 
+let _lastRawVideoText = '';
+
 async function buildCache() {
   if (videoCache && Date.now() - lastFetch < CACHE_TTL) return { videoCache, entCache };
   const now = Date.now();
@@ -108,6 +110,7 @@ async function buildCache() {
       .then(r => (r.ok ? r.text() : null))
       .catch(() => null),
   ]);
+  _lastRawVideoText = rawVideoText;
   const rawVideo = parseCSV(rawVideoText);
 
   const entMap = {};
@@ -178,6 +181,11 @@ export default async function handler(req, res) {
         sampleRow:   rows[0],    sampleEnt: ents[0],
         uniqueType:  [...new Set(rows.map(r => r.type).filter(Boolean))],
         uniqueCrm:   [...new Set(rows.map(r => r.crmStatus).filter(Boolean))],
+        rawVideoLength: _lastRawVideoText.length,
+        rawVideoPreview: _lastRawVideoText.slice(0, 500),
+        hasAuth: !!(MB_USER && MB_PASS),
+        hasApiKey: !!MB_API_KEY,
+        cardId: VIDEO_CARD_ID,
       });
     }
     res.status(200).json({ rows, ents, total: rows.length, lastSynced: new Date(lastFetch).toISOString() });
