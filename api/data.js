@@ -59,9 +59,21 @@ async function fetchCardCsv(cardId) {
     resp = await doFetch(token);
   }
   if (!resp.ok) {
-    throw new Error(`Video card ${cardId} query ${resp.status}: ${(await resp.text()).slice(0, 200)}`);
+    throw new Error(`Video card ${cardId} query ${resp.status}: ${(await resp.text()).slice(0, 300)}`);
   }
-  return resp.text();
+  const text = await resp.text();
+  if (text.trimStart().startsWith('{')) {
+    let errMsg = 'Metabase returned JSON instead of CSV';
+    try {
+      const j = JSON.parse(text);
+      const via = j.via || j.data?.via || [];
+      const failedStep = via.find(v => v.status === 'failed');
+      if (failedStep) errMsg = failedStep.error || errMsg;
+      else if (j.error) errMsg = j.error;
+    } catch (_) {}
+    throw new Error(`Card ${cardId}: ${errMsg.slice(0, 300)}`);
+  }
+  return text;
 }
 
 function splitRow(row) {
