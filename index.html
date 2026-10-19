@@ -10,7 +10,7 @@
 <style>
 :root{--f-display:'Inter',sans-serif;--f-mono:'JetBrains Mono',monospace;}
 [data-theme="dark"]{--bg:#1a1a1a;--panel:#1a1a1a;--card:#252525;--card2:#2e2e2e;--rim:#333333;--rim2:#404040;--t1:#ffffff;--t2:#cccccc;--t3:#888888;--accent:#5c7cfa;--ag:rgba(92,124,250,.12);--ag2:rgba(92,124,250,.06);--red:#f0516e;--amber:#f5a623;--green:#00c896;--purple:#b48fff;--teal:#2dd4cf;--pink:#f472b6;--glow:0 0 0 1px rgba(92,124,250,.3),0 6px 24px rgba(0,0,0,.4);--sh:0 1px 2px rgba(0,0,0,.5),0 2px 8px rgba(0,0,0,.3);--sh2:0 2px 6px rgba(0,0,0,.6),0 8px 24px rgba(0,0,0,.4);}
-[data-theme="light"]{--bg:#f4f5fa;--panel:#eef0f8;--card:#ffffff;--card2:#f7f8fd;--rim:#dde1f0;--rim2:#c8ceea;--t1:#090c1a;--t2:#3d4568;--t3:#9097be;--accent:#3a5cf0;--ag:rgba(58,92,240,.1);--ag2:rgba(58,92,240,.05);--red:#d92f4e;--amber:#c07a00;--green:#00996d;--purple:#7c3aed;--teal:#0891b2;--pink:#db2777;--glow:0 0 0 1px rgba(58,92,240,.3),0 6px 24px rgba(58,92,240,.12);--sh:0 1px 3px rgba(0,0,0,.08),0 4px 12px rgba(0,0,0,.06);--sh2:0 2px 8px rgba(0,0,0,.1),0 12px 32px rgba(0,0,0,.08);}
+[data-theme="light"]{--bg:#f4f5fa;--panel:#eef0f8;--card:#ffffff;--card2:#f7f8fd;--rim:#dde1f0;--rim2:#c8ceea;--t1:#090c1a;--t2:#1e2545;--t3:#525b85;--accent:#3a5cf0;--ag:rgba(58,92,240,.1);--ag2:rgba(58,92,240,.05);--red:#d92f4e;--amber:#c07a00;--green:#00996d;--purple:#7c3aed;--teal:#0891b2;--pink:#db2777;--glow:0 0 0 1px rgba(58,92,240,.3),0 6px 24px rgba(58,92,240,.12);--sh:0 1px 3px rgba(0,0,0,.08),0 4px 12px rgba(0,0,0,.06);--sh2:0 2px 8px rgba(0,0,0,.1),0 12px 32px rgba(0,0,0,.08);}
 *,*::before,*::after{box-sizing:border-box;margin:0;padding:0}
 html{scroll-behavior:smooth}
 body{font-family:'Inter',sans-serif;background:var(--bg);color:var(--t1);min-height:100vh;overflow-x:hidden;-webkit-font-smoothing:antialiased;font-size:14px;transition:background .25s,color .25s}
@@ -376,6 +376,10 @@ const BKTS = [
   {l:'6–12h', k:'b6',  min:6,  max:12, c:'#00e5a0'},
   {l:'12+h',  k:'b12', min:12, max:9e9,c:'#f0516e'},
 ];
+const BKT_LIGHT = {'#5c7cfa':'#3a5cf0','#f5a623':'#b56a00','#b48fff':'#7c3aed','#00e5a0':'#00805f','#f0516e':'#c21e3c','#00c896':'#00805f','#2dd4cf':'#0e7490','#8b1e2f':'#8b1e2f'};
+function bktColor(hex){
+  return document.documentElement.getAttribute('data-theme')==='light' ? (BKT_LIGHT[hex]||hex) : hex;
+}
 const COLORS=['#5c7cfa','#f0516e','#f5a623','#00e5a0','#b48fff','#2dd4cf','#f472b6','#fb923c','#34d399','#60a5fa','#e879f9','#fbbf24'];
 
 // ── STATE ────────────────────────────────────────────────────────
@@ -443,8 +447,9 @@ function renderHours(rows){
   BKTS.forEach(b=>{
     const n=obj[b.k]||0,p=Math.round(n/mx*100),isActive=_activeBkt===b.k;
     const d=document.createElement('div');
-    d.className='hcard'+(isActive?' active':'');d.style.setProperty('--hc',b.c);
-    d.innerHTML=`<div class="hcard-bg"></div><div class="hcard-range">${b.l}</div><div class="hcard-n">${n.toLocaleString()}</div><div class="hcard-pct">${p}% of total</div><div class="hcard-bar"><div class="hcard-bar-fill" style="background:${b.c}"></div></div>`;
+    const col=bktColor(b.c);
+    d.className='hcard'+(isActive?' active':'');d.style.setProperty('--hc',col);
+    d.innerHTML=`<div class="hcard-bg"></div><div class="hcard-range">${b.l}</div><div class="hcard-n">${n.toLocaleString()}</div><div class="hcard-pct">${p}% of total</div><div class="hcard-bar"><div class="hcard-bar-fill" style="background:${col}"></div></div>`;
     setTimeout(()=>d.querySelector('.hcard-bar-fill').style.width=p+'%',100);
     d.onclick=e=>{e.stopPropagation();_activeBkt=_activeBkt===b.k?null:b.k;rerender();};
     el.appendChild(d);
