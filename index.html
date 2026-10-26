@@ -53,13 +53,12 @@ a{color:inherit;text-decoration:none}
 .dl-item{display:flex;align-items:center;gap:10px;width:100%;padding:7px 12px;border-radius:7px;font-size:11px;font-family:var(--f-mono);color:var(--t2);cursor:pointer;transition:background .12s;text-align:left;white-space:nowrap}
 .dl-item:hover{background:var(--card2);color:var(--t1)}
 .dl-item-icon{font-size:13px;width:16px;text-align:center}
-.status-cards{display:flex;gap:12px;margin-bottom:16px;flex-wrap:wrap}
-.stat-card{cursor:pointer;background:var(--card);border:1px solid var(--sc-border,var(--rim));border-radius:16px;padding:16px 18px;min-width:200px;max-width:260px;transition:transform .18s,box-shadow .18s,border-color .18s,background .18s;box-shadow:var(--sh)}
+.stat-card{cursor:pointer;background:var(--card);border:1px solid var(--sc-border,var(--rim));border-radius:16px;padding:18px 20px;transition:transform .18s,box-shadow .18s,border-color .18s,background .18s;box-shadow:var(--sh);display:flex;flex-direction:column;justify-content:center}
 .stat-card:hover{transform:translateY(-2px);box-shadow:var(--sh2);border-color:var(--sc)}
 .stat-card.active{border-color:var(--sc);background:var(--sc-bg);box-shadow:0 0 0 2px var(--sc),0 4px 16px rgba(0,0,0,.3)}
-.stat-card-label{font-size:10px;font-family:var(--f-mono);text-transform:uppercase;letter-spacing:.8px;margin-bottom:8px;font-weight:600;color:var(--sc)}
-.stat-card-val{font-size:36px;font-weight:800;letter-spacing:-1.5px;line-height:1;font-variant-numeric:tabular-nums;color:var(--sc)}
-.stat-card-sub{font-size:11px;font-family:var(--f-mono);color:var(--t2);margin-top:6px;line-height:1.35}
+.stat-card-label{font-size:11px;font-family:var(--f-mono);text-transform:uppercase;letter-spacing:.8px;margin-top:0;margin-bottom:6px;font-weight:600;color:var(--sc)}
+.stat-card-val{font-size:32px;font-weight:800;letter-spacing:-1.5px;line-height:1;font-variant-numeric:tabular-nums;color:var(--sc)}
+.stat-card-sub{font-size:12px;color:var(--t2);margin-top:3px;line-height:1.3}
 .metric-strip{display:grid;grid-template-columns:repeat(auto-fill,minmax(155px,1fr));gap:12px}
 .metric{background:var(--card);border:1px solid var(--rim);border-radius:16px;padding:18px 20px;position:relative;overflow:hidden;box-shadow:var(--sh);transition:transform .18s,box-shadow .18s}
 .metric:hover{transform:translateY(-2px);box-shadow:var(--sh2)}
@@ -253,15 +252,7 @@ td:last-child{padding-right:16px;text-align:right}
     </div>
     <!-- metrics + QC Done side card -->
     <div>
-      <div class="status-cards">
-        <div class="stat-card" id="hold-card" onclick="setView('hold')" title="Click to filter by Hold Videos (crm_status = qc_onhold)" style="--sc:var(--red);--sc-border:rgba(240,81,110,.3);--sc-bg:rgba(240,81,110,.1)">
-          <div class="stat-card-label">Hold Videos</div>
-          <div class="stat-card-val" id="hold-card-val">0</div>
-          <div class="stat-card-sub">Total Videos on Hold</div>
-        </div>
-      </div>
       <div class="metric-strip" id="metrics"></div>
-
     </div>
   </div>
 
@@ -456,12 +447,18 @@ function renderMetrics(rows){
   const total=rows.length,
         ents=[...new Set(rows.map(r=>r.eid).filter(Boolean))].length,
         teams=[...new Set(rows.map(r=>r.teamId).filter(Boolean))].length;
+  // Hold-card count = qc_onhold rows in the base QC Pending pool, independent
+  // of the current view/filters, so it stays stable as a sibling of the metrics.
+  const holdCount=_rows.filter(r=>(r.rb||'').trim()==='QC Pending'&&isHold(r)).length;
   const items=[
     {icon:'🎬',val:total,  label:'Total Videos', sub:lbl()||'QC Pending'},
     {icon:'🏢',val:ents,   label:'Enterprises',  sub:'Unique'},
     {icon:'👥',val:teams,  label:'Teams',        sub:'Assigned'},
   ];
-  document.getElementById('metrics').innerHTML=items.map(i=>`<div class="metric"><div class="metric-icon">${i.icon}</div><div class="metric-val" style="font-size:${typeof i.val==='string'&&i.val.includes('h')?'24px':'32px'}">${typeof i.val==='number'?i.val.toLocaleString():i.val}</div><div class="metric-label">${i.label}</div><div class="metric-sub">${i.sub}</div></div>`).join('');
+  const holdActive = _activeView==='hold' ? ' active' : '';
+  const holdCard = `<div class="stat-card${holdActive}" id="hold-card" onclick="setView('hold')" title="Click to filter by Hold Videos (crm_status = qc_onhold)" style="--sc:var(--red);--sc-border:rgba(240,81,110,.3);--sc-bg:rgba(240,81,110,.1)"><div class="stat-card-label">Hold Videos</div><div class="stat-card-val" id="hold-card-val">${holdCount.toLocaleString()}</div><div class="stat-card-sub">Total Videos on Hold</div></div>`;
+  const metricCards = items.map(i=>`<div class="metric"><div class="metric-icon">${i.icon}</div><div class="metric-val" style="font-size:${typeof i.val==='string'&&i.val.includes('h')?'24px':'32px'}">${typeof i.val==='number'?i.val.toLocaleString():i.val}</div><div class="metric-label">${i.label}</div><div class="metric-sub">${i.sub}</div></div>`).join('');
+  document.getElementById('metrics').innerHTML = metricCards + holdCard;
 
   const overviewTag = _activeRB || (_activeView==='hold' ? 'Hold Videos' : 'QC Pending');
   document.getElementById('overview-tag').textContent=overviewTag.toUpperCase();
@@ -699,11 +696,6 @@ function dlAllRows(src,fmt){
 // ── RERENDER ──────────────────────────────────────────────────────
 function rerender(){
   const rows=f(),l=lbl();
-  // Hold card count = qc_onhold rows in the base QC Pending pool, regardless
-  // of the current view or inner filters — so the badge is a stable total.
-  const holdCount=_rows.filter(r=>(r.rb||'').trim()==='QC Pending'&&isHold(r)).length;
-  const holdValEl=document.getElementById('hold-card-val');if(holdValEl)holdValEl.textContent=holdCount.toLocaleString();
-  document.getElementById('hold-card')?.classList.toggle('active',_activeView==='hold');
   renderMetrics(rows);renderHours(rows);renderCharts(rows);renderTypeCards();
   // Enterprise agg
   const eMap={};
