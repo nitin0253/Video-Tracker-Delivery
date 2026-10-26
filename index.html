@@ -53,6 +53,13 @@ a{color:inherit;text-decoration:none}
 .dl-item{display:flex;align-items:center;gap:10px;width:100%;padding:7px 12px;border-radius:7px;font-size:11px;font-family:var(--f-mono);color:var(--t2);cursor:pointer;transition:background .12s;text-align:left;white-space:nowrap}
 .dl-item:hover{background:var(--card2);color:var(--t1)}
 .dl-item-icon{font-size:13px;width:16px;text-align:center}
+.status-cards{display:flex;gap:12px;margin-bottom:16px;flex-wrap:wrap}
+.stat-card{cursor:pointer;background:var(--card);border:1px solid var(--sc-border,var(--rim));border-radius:16px;padding:16px 18px;min-width:200px;max-width:260px;transition:transform .18s,box-shadow .18s,border-color .18s,background .18s;box-shadow:var(--sh)}
+.stat-card:hover{transform:translateY(-2px);box-shadow:var(--sh2);border-color:var(--sc)}
+.stat-card.active{border-color:var(--sc);background:var(--sc-bg);box-shadow:0 0 0 2px var(--sc),0 4px 16px rgba(0,0,0,.3)}
+.stat-card-label{font-size:10px;font-family:var(--f-mono);text-transform:uppercase;letter-spacing:.8px;margin-bottom:8px;font-weight:600;color:var(--sc)}
+.stat-card-val{font-size:36px;font-weight:800;letter-spacing:-1.5px;line-height:1;font-variant-numeric:tabular-nums;color:var(--sc)}
+.stat-card-sub{font-size:11px;font-family:var(--f-mono);color:var(--t2);margin-top:6px;line-height:1.35}
 .metric-strip{display:grid;grid-template-columns:repeat(auto-fill,minmax(155px,1fr));gap:12px}
 .metric{background:var(--card);border:1px solid var(--rim);border-radius:16px;padding:18px 20px;position:relative;overflow:hidden;box-shadow:var(--sh);transition:transform .18s,box-shadow .18s}
 .metric:hover{transform:translateY(-2px);box-shadow:var(--sh2)}
@@ -246,6 +253,13 @@ td:last-child{padding-right:16px;text-align:right}
     </div>
     <!-- metrics + QC Done side card -->
     <div>
+      <div class="status-cards">
+        <div class="stat-card" id="hold-card" onclick="setView('hold')" title="Click to filter by Hold Videos (crm_status = qc_onhold)" style="--sc:var(--red);--sc-border:rgba(240,81,110,.3);--sc-bg:rgba(240,81,110,.1)">
+          <div class="stat-card-label">Hold Videos</div>
+          <div class="stat-card-val" id="hold-card-val">0</div>
+          <div class="stat-card-sub">Total Videos on Hold</div>
+        </div>
+      </div>
       <div class="metric-strip" id="metrics"></div>
 
     </div>
@@ -388,7 +402,13 @@ const COLORS=['#5c7cfa','#f0516e','#f5a623','#00e5a0','#b48fff','#2dd4cf','#f472
 let _rows=[], _ents=[], _entMap={},
     _activeType=null, _activeBkt=null, _activeSeg=null, _activeTmpl=null,
     _activeRB=null,  // 'QC Pending' | 'QC Done' | null (null = show QC Pending)
+    _activeView='pending', // 'pending' | 'hold' — qc_onhold rows carve out of pending
     _drawerRows=[], _tblData={}, _sortState={};
+
+// Rows with crm_status = qc_onhold are shown ONLY under the Hold Videos card,
+// never in the default QC Pending view.
+const HOLD_CRM='qc_onhold';
+function isHold(r){return (r.crmStatus||'').trim().toLowerCase()===HOLD_CRM;}
 
 // ── CSV helpers (for upload fallback) ────────────────────────────
 function splitRow(row){const out=[];let cur='',q=false;for(let i=0;i<row.length;i++){const c=row[i];if(c==='"'){if(q&&row[i+1]==='"'){cur+='"';i++;}else q=!q;}else if(c===','&&!q){out.push(cur.trim());cur='';}else cur+=c;}out.push(cur.trim());return out;}
@@ -403,6 +423,10 @@ function addB(o,h){if(h==null)return;for(const b of BKTS){if(h>=b.min&&(b.max===
 function f(){
   const rb=_activeRB||'QC Pending';
   let rows=_rows.filter(r=>(r.rb||'').trim()===rb);
+  // Hold Videos carve-out — only applies when the base is QC Pending.
+  if(rb==='QC Pending'){
+    rows = _activeView==='hold' ? rows.filter(isHold) : rows.filter(r=>!isHold(r));
+  }
   if(_activeType) rows=rows.filter(r=>(r.type||'').trim()===_activeType);
   if(_activeBkt){const b=BKTS.find(b=>b.k===_activeBkt);if(b)rows=rows.filter(r=>{const h=r.hrsRecv;if(h==null)return false;return h>=b.min&&(b.max===9e9?true:h<b.max);});}
   if(_activeSeg)  rows=rows.filter(r=>(r.customerSegment||'').trim()===_activeSeg);
@@ -410,7 +434,8 @@ function f(){
   return rows;
 }
 function lbl(){
-  const parts=[_activeRB||'QC Pending'];
+  const base = _activeRB || (_activeView==='hold' ? 'Hold Videos' : 'QC Pending');
+  const parts=[base];
   if(_activeType) parts.push(_activeType);
   if(_activeBkt){const b=BKTS.find(b=>b.k===_activeBkt);if(b)parts.push(b.l);}
   if(_activeSeg)  parts.push(_activeSeg);
@@ -438,7 +463,8 @@ function renderMetrics(rows){
   ];
   document.getElementById('metrics').innerHTML=items.map(i=>`<div class="metric"><div class="metric-icon">${i.icon}</div><div class="metric-val" style="font-size:${typeof i.val==='string'&&i.val.includes('h')?'24px':'32px'}">${typeof i.val==='number'?i.val.toLocaleString():i.val}</div><div class="metric-label">${i.label}</div><div class="metric-sub">${i.sub}</div></div>`).join('');
 
-  document.getElementById('overview-tag').textContent=(_activeRB||'QC PENDING').toUpperCase();
+  const overviewTag = _activeRB || (_activeView==='hold' ? 'Hold Videos' : 'QC Pending');
+  document.getElementById('overview-tag').textContent=overviewTag.toUpperCase();
   updateResetBtn();
 }
 
@@ -624,9 +650,16 @@ function renderDrawerRows(){
 }
 
 // ── FILTERS ───────────────────────────────────────────────────────
-function toggleDoneFilter(){_activeRB=_activeRB==='QC Done'?null:'QC Done';_activeType=null;_activeBkt=null;_activeSeg=null;_activeTmpl=null;syncTypeActive();rerender();}
-function resetAllFilters(){_activeRB=null;_activeType=null;_activeBkt=null;_activeSeg=null;_activeTmpl=null;syncTypeActive();rerender();}
-function anyFilterActive(){return!!(_activeRB||_activeType||_activeBkt||_activeSeg||_activeTmpl);}
+function toggleDoneFilter(){_activeRB=_activeRB==='QC Done'?null:'QC Done';_activeView='pending';_activeType=null;_activeBkt=null;_activeSeg=null;_activeTmpl=null;syncTypeActive();rerender();}
+function setView(v){
+  // Toggle: click the active card again to return to the default pending view.
+  _activeView = (_activeView===v) ? 'pending' : v;
+  // Switching the carve-out resets inner filters (same shape as toggleDoneFilter).
+  _activeRB=null;_activeType=null;_activeBkt=null;_activeSeg=null;_activeTmpl=null;
+  syncTypeActive();rerender();
+}
+function resetAllFilters(){_activeRB=null;_activeView='pending';_activeType=null;_activeBkt=null;_activeSeg=null;_activeTmpl=null;syncTypeActive();rerender();}
+function anyFilterActive(){return!!(_activeRB||_activeType||_activeBkt||_activeSeg||_activeTmpl||_activeView!=='pending');}
 function updateResetBtn(){const b=document.getElementById('reset-btn');if(b)b.style.display=anyFilterActive()?'inline-flex':'none';}
 
 // ── DOWNLOAD ──────────────────────────────────────────────────────
@@ -666,6 +699,11 @@ function dlAllRows(src,fmt){
 // ── RERENDER ──────────────────────────────────────────────────────
 function rerender(){
   const rows=f(),l=lbl();
+  // Hold card count = qc_onhold rows in the base QC Pending pool, regardless
+  // of the current view or inner filters — so the badge is a stable total.
+  const holdCount=_rows.filter(r=>(r.rb||'').trim()==='QC Pending'&&isHold(r)).length;
+  const holdValEl=document.getElementById('hold-card-val');if(holdValEl)holdValEl.textContent=holdCount.toLocaleString();
+  document.getElementById('hold-card')?.classList.toggle('active',_activeView==='hold');
   renderMetrics(rows);renderHours(rows);renderCharts(rows);renderTypeCards();
   // Enterprise agg
   const eMap={};
@@ -702,7 +740,7 @@ function processData(rows,ents){
     if(r.eid&&!_entMap[r.eid])_entMap[r.eid]={name:r.entName,stage:r.entStage,email:r.pocEmail||r.entEmail||''};
     else if(r.eid&&_entMap[r.eid]&&!_entMap[r.eid].email&&(r.pocEmail||r.entEmail))_entMap[r.eid].email=r.pocEmail||r.entEmail;
   });
-  _activeType=null;_activeRB=null;renderTypeCards();rerender();
+  _activeType=null;_activeRB=null;_activeView='pending';renderTypeCards();rerender();
 }
 
 // ── NORMALIZE ROW (for upload fallback) ───────────────────────────
